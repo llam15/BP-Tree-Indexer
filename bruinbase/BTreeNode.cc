@@ -55,7 +55,7 @@ int BTLeafNode::getKeyCount()
 	// }
 	// return keycount; 
 
-	// Store key count as first element in buffer.
+	// Key count stored as first element in buffer.
 	int *count = (int *) buffer;
 	return *count;
 }
@@ -89,7 +89,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	// Copy the first eid KRPairs into the temp buffer.
 	// The element to insert will come after these.
 	// Then copy the rest of the buffer after the element
-	offset = sizeof(int) + (sizeof(KRPair) * eid);
+	offset = BTLeafNode::BEGINNING_OFFSET + (sizeof(KRPair) * eid);
 	memcpy(temp_buffer, buffer, offset);
 	memcpy(temp_buffer + offset, &insert_pair, sizeof(KRPair));
 	memcpy(temp_buffer + offset + sizeof(KRPair), buffer + offset, 
@@ -144,12 +144,12 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 		pivot = num_keys/2 + 1;
 		side = 1;
 	}
-	offset = sizeof(int) + (sizeof(KRPair) * pivot);
+	offset = BTLeafNode::BEGINNING_OFFSET + (sizeof(KRPair) * pivot);
 
 	// Clear sibling anyways. 
 	memset(sibling.buffer, 0, PageFile::PAGE_SIZE);
 	// Move second half of buffer to sibling.
-	memcpy(sibling.buffer + sizeof(int), buffer + offset, 
+	memcpy(sibling.buffer + BTLeafNode::BEGINNING_OFFSET, buffer + offset, 
 		PageFile::PAGE_SIZE - sizeof(PageId) - offset);
 	// Sibling points to the next node that the original node was pointing to
 	sibling.setNextNodePtr(getNextNodePtr());
@@ -206,7 +206,7 @@ RC BTLeafNode::setKeyCount(int new_count)
 RC BTLeafNode::locate(int searchKey, int& eid)
 { 
 	// cur = beginning of buffer. keycount = number of keys in node
-	KRPair *cur = (KRPair *) buffer;
+	KRPair *cur = (KRPair *) (buffer + BTLeafNode::BEGINNING_OFFSET);
 	int keycount = getKeyCount();
 
 	// Search through the buffer. 
@@ -242,7 +242,7 @@ RC BTLeafNode::readEntry(int eid, int& key, RecordId& rid)
 	}
 
 	// Get target pair. Put key and rid into respective variables
-	target = (KRPair *) buffer + eid;
+	target = ((KRPair *) (buffer + BTLeafNode::BEGINNING_OFFSET))  + eid;
 	key = target->key;
 	rid = target->rid;
 
@@ -319,7 +319,9 @@ RC BTNonLeafNode::write(PageId pid, PageFile& pf)
  */
 int BTNonLeafNode::getKeyCount()
 { 
-	return 0;
+	// Store key count as first element in buffer.
+	int *count = (int *) buffer;
+	return *count;
 }
 
 
@@ -346,6 +348,55 @@ RC BTNonLeafNode::insert(int key, PageId pid)
  */
 RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey)
 { return 0; }
+
+/**
+ * Set the key count in the buffer. The key count is contained in the first
+ * four bytes of the buffer.
+ * @param new_count[IN] The new key count
+ * @return 0 if successful. Return an error code if there is an error.
+ */
+RC BTNonLeafNode::setKeyCount(int new_count)
+{
+	if (new_count < 0) {
+		return RC_INVALID_ATTRIBUTE;
+	}
+	int *cur_count = (int*) buffer;
+	*cur_count = new_count;
+	return 0;
+}
+
+/**
+ * If searchKey exists in the node, set eid to the index entry
+ * with searchKey and return 0. If not, set eid to the index entry
+ * immediately after the largest index key that is smaller than searchKey,
+ * and return the error code RC_NO_SUCH_RECORD.
+ * Remember that keys inside a B+tree node are always kept sorted.
+ * @param searchKey[IN] the key to search for.
+ * @param eid[OUT] the index entry number with searchKey or immediately
+                   behind the largest key smaller than searchKey.
+ * @return 0 if searchKey is found. Otherwise return an error code.
+ */
+RC BTNonLeafNode::locate(int searchKey, int& eid)
+{ 
+	// cur = beginning of buffer. keycount = number of keys in node
+	KPPair *cur = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET);
+	int keycount = getKeyCount();
+
+	// Search through the buffer. 
+	// If the current key is the searchKey, then stop and return that eid.
+	// Else if the current key is greater than the searchKey, then the 
+	// searchKey does not exist. Stop and return the eid of the first larger element.
+	for (eid = 0; eid < keycount; eid++) {
+		if (cur->key == searchKey) {
+			return 0;
+		}
+		else if (cur->key > searchKey) {
+			return RC_NO_SUCH_RECORD;
+		}
+		cur++;
+	}
+	return RC_NO_SUCH_RECORD; 
+}
 
 /*
  * Given the searchKey, find the child-node pointer to follow and

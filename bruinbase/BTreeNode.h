@@ -26,6 +26,11 @@ class BTLeafNode {
     static const int MAX_LEAF_KEYS = 84;
 
     /**
+    * First 4 bytes is key count.
+    */
+    static const int BEGINNING_OFFSET = sizeof(int);
+
+    /**
      * Constructor for Leaf Node.
      */
     BTLeafNode();
@@ -88,7 +93,6 @@ class BTLeafNode {
     */
     PageId getNextNodePtr();
 
-
    /**
     * Set the next slibling node PageId.
     * @param pid[IN] the PageId of the next sibling node 
@@ -148,6 +152,11 @@ class BTNonLeafNode {
     static const int MAX_NON_KEYS = 127;
 
     /**
+    * First 4 bytes is key count. Then first PageId
+    */
+    static const int BEGINNING_OFFSET = sizeof(int) + sizeof(PageId);
+
+    /**
      * Constructor for Leaf Node.
      */
     BTNonLeafNode();
@@ -174,6 +183,27 @@ class BTNonLeafNode {
     * @return 0 if successful. Return an error code if there is an error.
     */
     RC insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey);
+
+    /**
+     * Set the key count in the buffer. The key count is contained in the first
+     * four bytes of the buffer.
+     * @param new_count[IN] The new key count
+     * @return 0 if successful. Return an error code if there is an error.
+     */
+    RC setKeyCount(int new_count);
+
+    /**
+    * If searchKey exists in the node, set eid to the index entry
+    * with searchKey and return 0. If not, set eid to the index entry
+    * immediately after the largest index key that is smaller than searchKey, 
+    * and return the error code RC_NO_SUCH_RECORD.
+    * Remember that keys inside a B+tree node are always kept sorted.
+    * @param searchKey[IN] the key to search for.
+    * @param eid[OUT] the index entry number with searchKey or immediately
+                      behind the largest key smaller than searchKey.
+    * @return 0 if searchKey is found. If not, RC_NO_SEARCH_RECORD.
+    */
+    RC locate(int searchKey, int& eid);
 
    /**
     * Given the searchKey, find the child-node pointer to follow and
