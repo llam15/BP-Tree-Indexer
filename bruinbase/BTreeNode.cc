@@ -47,13 +47,17 @@ int BTLeafNode::getKeyCount()
 	// Traverse through buffer in 12 byte increments
 	// If the key = 0, then we have reached the end of 
 	// entries. Otherwise keep going until MAX_LEAF_KEYS
-	int keycount = 0;
-	KRPair *cur = (KRPair *) buffer;
-	while (cur->key != 0 && keycount < BTLeafNode::MAX_LEAF_KEYS) {
-		keycount++;
-		cur++;
-	}
-	return keycount; 
+	// int keycount = 0;
+	// KRPair *cur = (KRPair *) buffer;
+	// while (cur->key != 0 && keycount < BTLeafNode::MAX_LEAF_KEYS) {
+	// 	keycount++;
+	// 	cur++;
+	// }
+	// return keycount; 
+
+	// Store key count as first element in buffer.
+	int *count = (int *) buffer;
+	return *count;
 }
 
 /*
@@ -64,12 +68,13 @@ int BTLeafNode::getKeyCount()
  */
 RC BTLeafNode::insert(int key, const RecordId& rid)
 { 
+	int num_keys = getKeyCount();
 	int eid;
 	int offset;
 	KRPair insert_pair;
 
 	// If no space, return error code
-	if (getKeyCount() >= BTLeafNode::MAX_LEAF_KEYS) {
+	if (num_keys >= BTLeafNode::MAX_LEAF_KEYS) {
 		return RC_NODE_FULL;
 	}
 
@@ -84,7 +89,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	// Copy the first eid KRPairs into the temp buffer.
 	// The element to insert will come after these.
 	// Then copy the rest of the buffer after the element
-	offset = sizeof(KRPair) * eid;
+	offset = sizeof(int) + (sizeof(KRPair) * eid);
 	memcpy(temp_buffer, buffer, offset);
 	memcpy(temp_buffer + offset, &insert_pair, sizeof(KRPair));
 	memcpy(temp_buffer + offset + sizeof(KRPair), buffer + offset, 
@@ -95,6 +100,10 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 
 	// Free temp_buffer to prevent memory leak
 	free(temp_buffer);
+
+	// Increase num_keys.
+	num_keys++;
+	setKeyCount(num_keys);
 	return 0;
 }
 
@@ -114,9 +123,9 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	KRPair insert_pair;
 	int eid;
 	int num_keys = getKeyCount();
-	// Contains the eid of the pair that will be the first of the new sibling
-	int pivot = (num_keys + 1)/2;
-	int offset = sizeof(KRPair) * pivot;
+	int pivot; // Contains the eid of the pair at which we are splitting
+	int offset;
+	int side = 0; // 0 = left, 1 = right
 
 	// Check that sibling is EMPTY
 	if (sibling.getKeyCount() != 0)
@@ -126,20 +135,34 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	if (num_keys < BTLeafNode::MAX_LEAF_KEYS)
 		return RC_INVALID_ATTRIBUTE;
 
+	locate(key, eid);
+	// Split consistently, such that left node has more keys.
+	if (eid < (num_keys/2)) {
+		pivot = num_keys/2;
+	} 
+	else {
+		pivot = num_keys/2 + 1;
+		side = 1;
+	}
+	offset = sizeof(int) + (sizeof(KRPair) * pivot);
+
 	// Clear sibling anyways. 
 	memset(sibling.buffer, 0, PageFile::PAGE_SIZE);
 	// Move second half of buffer to sibling.
-	memcpy(sibling.buffer, buffer + offset, 
+	memcpy(sibling.buffer + sizeof(int), buffer + offset, 
 		PageFile::PAGE_SIZE - sizeof(PageId) - offset);
-	// sibling points to the next node that the original node was pointing to
+	// Sibling points to the next node that the original node was pointing to
 	sibling.setNextNodePtr(getNextNodePtr());
+	// Number of keys in sibling is always half
+	sibling.setKeyCount(num_keys/2);
 
 	// Clear second half of buffer.
 	memset(buffer + offset, 0, PageFile::PAGE_SIZE - sizeof(PageId) - offset);
+	// Set number of keys. Is always half + 1
+	setKeyCount((num_keys/2) + 1);
 
 	// Insert new key, rid pair into correct leaf node.
-	locate(key, eid);
-	if (eid >= pivot) {
+	if (side) {
 		sibling.insert(key, rid);
 	}
 	else {
@@ -151,6 +174,22 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 
 	// Original PID???
 	return 0; 
+}
+
+/**
+ * Set the key count in the buffer. The key count is contained in the first
+ * four bytes of the buffer.
+ * @param new_count[IN] The new key count
+ * @return 0 if successful. Return an error code if there is an error.
+ */
+RC BTLeafNode::setKeyCount(int new_count)
+{
+	if (new_count < 0) {
+		return RC_INVALID_ATTRIBUTE;
+	}
+	int *cur_count = (int*) buffer;
+	*cur_count = new_count;
+	return 0;
 }
 
 /**
@@ -280,16 +319,7 @@ RC BTNonLeafNode::write(PageId pid, PageFile& pf)
  */
 int BTNonLeafNode::getKeyCount()
 { 
-	// Traverse through buffer in 12 byte increments
-	// If the key = 0, then we have reached the end of 
-	// entries. Otherwise keep going until MAX_LEAF_KEYS
-	int keycount = 0;
-	KPPair *cur = ((KPPair *) buffer) + sizeof(PageId);
-	while (cur->key != 0 && keycount < BTNonLeafNode::MAX_NON_KEYS) {
-		keycount++;
-		cur++;
-	}
-	return keycount; 
+	return 0;
 }
 
 
@@ -300,7 +330,9 @@ int BTNonLeafNode::getKeyCount()
  * @return 0 if successful. Return an error code if the node is full.
  */
 RC BTNonLeafNode::insert(int key, PageId pid)
-{ return 0; }
+{ 
+	return 0;
+}
 
 /*
  * Insert the (key, pid) pair to the node

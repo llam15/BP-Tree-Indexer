@@ -20,10 +20,10 @@ class BTLeafNode {
   public:
 
     /**
-    * KRPair = 12 bytes. 1024 bytes total, minus 4 for PageID. 
-    * 1020 bytes/(12 bytes/pair) = 85 pairs (keys).
+    * KRPair = 12 bytes. 1024 bytes total, minus 4 for PageID, minus 4 for keycount. 
+    * floor(1016 bytes/(12 bytes/pair)) = 84 pairs (keys).
     */
-    static const int MAX_LEAF_KEYS = 85;
+    static const int MAX_LEAF_KEYS = 84;
 
     /**
      * Constructor for Leaf Node.
@@ -51,6 +51,14 @@ class BTLeafNode {
     * @return 0 if successful. Return an error code if there is an error.
     */
     RC insertAndSplit(int key, const RecordId& rid, BTLeafNode& sibling, int& siblingKey);
+
+    /**
+     * Set the key count in the buffer. The key count is contained in the first
+     * four bytes of the buffer.
+     * @param new_count[IN] The new key count
+     * @return 0 if successful. Return an error code if there is an error.
+     */
+    RC setKeyCount(int new_count);
 
    /**
     * If searchKey exists in the node, set eid to the index entry
@@ -134,8 +142,8 @@ class BTNonLeafNode {
   public:
 
     /**
-    * KPPair = 8 bytes. 1024 bytes total, minus 4 for first PageID. 
-    * 1020 bytes/(8 bytes/pair) = 85 pairs (keys).
+    * KPPair = 8 bytes. 1024 bytes total, minus 4 for first PageID, minus 4 for keycount. 
+    * 1016 bytes/(8 bytes/pair) = 127 pairs (keys).
     */
     static const int MAX_NON_KEYS = 127;
 
