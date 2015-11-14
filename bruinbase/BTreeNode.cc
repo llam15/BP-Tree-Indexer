@@ -13,7 +13,7 @@ using namespace std;
  */
 BTLeafNode::BTLeafNode()
 {
-	memset(buffer, 0, PageFile::PAGE_SIZE); // this is \0??
+	memset(buffer, 0, PageFile::PAGE_SIZE); 
 }
 
 /*
@@ -46,10 +46,10 @@ int BTLeafNode::getKeyCount()
 { 
 	// Traverse through buffer in 12 byte increments
 	// If the key = 0, then we have reached the end of 
-	// entries. Otherwise keep going until MAX_KEYS
+	// entries. Otherwise keep going until MAX_LEAF_KEYS
 	int keycount = 0;
 	KRPair *cur = (KRPair *) buffer;
-	while (cur->key != 0 && keycount < BTLeafNode::MAX_KEYS) {
+	while (cur->key != 0 && keycount < BTLeafNode::MAX_LEAF_KEYS) {
 		keycount++;
 		cur++;
 	}
@@ -69,7 +69,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	KRPair insert_pair;
 
 	// If no space, return error code
-	if (getKeyCount() >= BTLeafNode::MAX_KEYS) {
+	if (getKeyCount() >= BTLeafNode::MAX_LEAF_KEYS) {
 		return RC_NODE_FULL;
 	}
 
@@ -123,7 +123,7 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 		return RC_INVALID_ATTRIBUTE;
 
 	// Only split if the current node is FULL
-	if (num_keys < BTLeafNode::MAX_KEYS)
+	if (num_keys < BTLeafNode::MAX_LEAF_KEYS)
 		return RC_INVALID_ATTRIBUTE;
 
 	// Clear sibling anyways. 
@@ -146,8 +146,10 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 		insert(key, rid);
 	}
 
+	// siblingKey = first key in sibling node.
 	siblingKey = ((KRPair *) sibling.buffer)->key;
 
+	// Original PID???
 	return 0; 
 }
 
@@ -243,13 +245,23 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 //////////////////////////////////////////////////////////////
 
 /*
+ * Constructor. Initialize buffer to all 0's.
+ */
+BTNonLeafNode::BTNonLeafNode()
+{
+	memset(buffer, 0, PageFile::PAGE_SIZE); 
+}
+
+/*
  * Read the content of the node from the page pid in the PageFile pf.
  * @param pid[IN] the PageId to read
  * @param pf[IN] PageFile to read from
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::read(PageId pid, const PageFile& pf)
-{ return 0; }
+{ 
+	return pf.read(pid, buffer); 
+}
     
 /*
  * Write the content of the node to the page pid in the PageFile pf.
@@ -258,14 +270,27 @@ RC BTNonLeafNode::read(PageId pid, const PageFile& pf)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::write(PageId pid, PageFile& pf)
-{ return 0; }
+{ 
+	return pf.write(pid, buffer); 
+}
 
 /*
  * Return the number of keys stored in the node.
  * @return the number of keys in the node
  */
 int BTNonLeafNode::getKeyCount()
-{ return 0; }
+{ 
+	// Traverse through buffer in 12 byte increments
+	// If the key = 0, then we have reached the end of 
+	// entries. Otherwise keep going until MAX_LEAF_KEYS
+	int keycount = 0;
+	KPPair *cur = ((KPPair *) buffer) + sizeof(PageId);
+	while (cur->key != 0 && keycount < BTNonLeafNode::MAX_NON_KEYS) {
+		keycount++;
+		cur++;
+	}
+	return keycount; 
+}
 
 
 /*

@@ -23,7 +23,7 @@ class BTLeafNode {
     * KRPair = 12 bytes. 1024 bytes total, minus 4 for PageID. 
     * 1020 bytes/(12 bytes/pair) = 85 pairs (keys).
     */
-    static const int MAX_KEYS = 85;
+    static const int MAX_LEAF_KEYS = 85;
 
     /**
      * Constructor for Leaf Node.
@@ -132,6 +132,18 @@ class BTLeafNode {
  */
 class BTNonLeafNode {
   public:
+
+    /**
+    * KPPair = 8 bytes. 1024 bytes total, minus 4 for first PageID. 
+    * 1020 bytes/(8 bytes/pair) = 85 pairs (keys).
+    */
+    static const int MAX_NON_KEYS = 127;
+
+    /**
+     * Constructor for Leaf Node.
+     */
+    BTNonLeafNode();
+
    /**
     * Insert a (key, pid) pair to the node.
     * Remember that all keys inside a B+tree node should be kept sorted.
@@ -202,6 +214,11 @@ class BTNonLeafNode {
     * that contains the node.
     */
     char buffer[PageFile::PAGE_SIZE];
+
+    typedef struct{
+        int key;
+        PageId pid;
+    } KPPair;
 }; 
 
 #endif /* BTREENODE_H */
