@@ -1,12 +1,21 @@
 #include "BTreeNode.h"
 #include <string.h>
 #include <stdlib.h>
+#include <cassert>
+#include <iostream>
 
 using namespace std;
 
 //////////////////////////////////////////////////////////////
-//						 BT LEAF NODE						//
+//                      BT LEAF NODE                        //
 //////////////////////////////////////////////////////////////
+
+/*
+ * The structure of a BT LEAF NODE:
+ *  ----------------------------------------------
+ * | num_keys | KR_Pair | KR_Pair | ... | nextPID |
+ *  ----------------------------------------------
+ */
 
 /*
  * Constructor. Initialize buffer to all 0's.
@@ -14,6 +23,122 @@ using namespace std;
 BTLeafNode::BTLeafNode()
 {
 	memset(buffer, 0, PageFile::PAGE_SIZE); 
+}
+
+void BTLeafNode::test()
+{
+	int eid, key;
+	RecordId rid, insert_rid;
+	
+	// no keys initially
+	cout << ( getKeyCount() == 0 );
+	
+	// the key 0 is not in the node
+	cout << ( locate(0, eid) == RC_NO_SUCH_RECORD );
+	
+	// we can't read entries in the empty node
+	for (int i = 0; i < 84; i++)
+		assert( readEntry(i, key, rid) == RC_INVALID_CURSOR );
+	
+	setNextNodePtr(25);
+	
+	insert_rid.pid = 11; insert_rid.sid = 1;
+	insert( 12, insert_rid  );
+	insert_rid.pid = 0;  insert_rid.sid = 12;
+	insert( 4,  insert_rid  );
+	insert_rid.pid = 9;  insert_rid.sid = 5;
+	insert( 0,  insert_rid  );
+	insert_rid.pid = 7;  insert_rid.sid = 8;
+	insert( 7,  insert_rid  );
+		
+	// 4 keys now in the node
+	cout << ( getKeyCount() == 4 );
+	
+	// next node ptr has PageID 25
+	cout << ( getNextNodePtr() == 25 );
+	
+	// the key 13 isn't in the node
+	cout << ( locate(13, eid) == RC_NO_SUCH_RECORD );
+	
+	// the key 7 is in the node
+	cout << ( locate(7,  eid) == 0);
+	
+	// 7 is the key of the third entry in the node
+	cout << ( eid == 2 );
+
+	// there is no fifth entry in the node
+	cout << ( readEntry(4, key, rid) == RC_INVALID_CURSOR );
+	
+	// the first entry in the node has a key of 0 and RecordID of (9, 5)
+	cout << ( readEntry(0, key, rid) == 0 );
+	cout << ( key == 0 && rid.pid == 9 && rid.sid == 5);
+	
+	for (int i = 20; i < 100; i++)
+	{
+		insert_rid.pid = i;
+		insert_rid.sid = 1;
+		insert( 120 - i, insert_rid );			
+	}
+
+	/* This should be the key layout right now:
+	 * 0 4 7 12 21 22 23 24 25 ... 100
+	*/
+	
+	// we now have 84 keys
+	cout << ( getKeyCount() == 84);
+	
+	// can't insert any more keys
+	insert_rid.pid = 2; insert_rid.sid = 2;
+	cout << ( insert(200, insert_rid ) == RC_NODE_FULL );
+	cout << ( locate(200, eid) == RC_NO_SUCH_RECORD );
+	
+	locate(100, eid);
+	
+	// eid of last key is 83
+	cout << (eid == 83);
+
+	// the sixth entry has a key of 22 and a RecordID of (98, 1)
+	cout << ( readEntry(5, key, rid) == 0 );
+	cout << ( key == 22 && rid.pid == 98 && rid.sid == 1 );
+	
+	BTLeafNode new_sibling;
+	int first_key_in_sibling;
+	
+	// try to insert the key 20 and RecordID (4, 10)
+	
+	//PageID saved_next = getNextNodePtr();
+	insert_rid.pid = 4; insert_rid.sid = 10;
+	cout <<  ( insertAndSplit(20, insert_rid, new_sibling, first_key_in_sibling) == 0 );
+	
+	// left node has 43 keys, right node has 42 keys
+	cout <<  ( getKeyCount() == 43 && new_sibling.getKeyCount() == 42);
+	
+	// left node points to right node
+	//cout <<  ( getNextNodePtr() == new_sibling.getPID() );
+	
+	// right node points to what left node pointed to before the insert
+	//cout <<  ( new_sibling.getNextNodePtr() == saved_next );
+	
+	// the last entry in the left node has a key of 59 after the split
+	cout <<  ( locate(59, eid) == 0 );
+	cout <<  ( eid == 42 );
+	
+	// the entry with key=60 is not in the left node. it is the first key in the right node
+	cout <<  ( locate(60, eid) == RC_NO_SUCH_RECORD );
+	cout <<  ( first_key_in_sibling = 60 );
+	cout <<  ( new_sibling.locate(60, eid) == 0 );
+	cout <<  ( eid == 0 );
+	
+	// the second key in the right node is 61
+	cout <<  ( new_sibling.locate(61, eid) == 0 );
+	cout <<  ( eid == 1 );
+	
+	// the last key in the new sibling is 100 with a RecordID (20, 1)
+	cout <<  ( new_sibling.readEntry(41, key, rid) == 0 );
+	cout <<  ( key == 100 && rid.pid == 20 && rid.sid == 1 );
+	
+	
+	cerr << "All tests successful.\n";	
 }
 
 /*
@@ -24,6 +149,7 @@ BTLeafNode::BTLeafNode()
  */
 RC BTLeafNode::read(PageId pid, const PageFile& pf)
 { 
+	//setPID(pid);
 	return pf.read(pid, buffer);
 }
     
@@ -158,6 +284,8 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 
 	// Clear second half of buffer.
 	memset(buffer + offset, 0, PageFile::PAGE_SIZE - sizeof(PageId) - offset);
+	// Set this node to point to the new sibling
+	//setNextNodePtr(sibling.getPID());
 	// Set number of keys. Is always half + 1
 	setKeyCount((num_keys/2) + 1);
 
@@ -171,8 +299,6 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 
 	// siblingKey = first key in sibling node.
 	siblingKey = ((KRPair *) sibling.buffer)->key;
-
-	// Original PID???
 	return 0; 
 }
 
@@ -278,10 +404,41 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 	return 0; 
 }
 
+/**
+* Return the pid of the current node.
+* @return the PageId of the current node
+*/
+PageId BTLeafNode::getPID()
+{
+	PageId *pid = (PageId *) (buffer + sizeof(int));
+	return *pid;
+}
+
+/**
+* Set the pid of the current node.
+* @param pid[IN] the PageId of the current node
+* @return 0 if successful. Return an error code if there is an error.
+*/
+RC BTLeafNode::setPID(PageId pid)
+{
+	if (pid < 0)
+		return RC_INVALID_ATTRIBUTE;
+
+	PageId *cur_pid = (PageId *) (buffer + sizeof(int));
+	*cur_pid = pid;
+	return 0;
+}
 
 //////////////////////////////////////////////////////////////
-//						BT NONLEAF NODE						//
+//                      BT NONLEAF NODE                     //
 //////////////////////////////////////////////////////////////
+
+/*
+ * The structure of a BT NON LEAF NODE:
+ *  ------------------------------------------------
+ * | num_keys | first_PID | KP_Pair | KP_Pair | ... |
+ *  ------------------------------------------------
+ */
 
 /*
  * Constructor. Initialize buffer to all 0's.
@@ -299,6 +456,7 @@ BTNonLeafNode::BTNonLeafNode()
  */
 RC BTNonLeafNode::read(PageId pid, const PageFile& pf)
 { 
+	//setPID(pid);
 	return pf.read(pid, buffer); 
 }
     
@@ -333,6 +491,42 @@ int BTNonLeafNode::getKeyCount()
  */
 RC BTNonLeafNode::insert(int key, PageId pid)
 { 
+	int num_keys = getKeyCount();
+	int eid;
+	int offset;
+	KPPair insert_pair;
+
+	// If no space, return error code
+	if (num_keys >= BTNonLeafNode::MAX_NON_KEYS) {
+		return RC_NODE_FULL;
+	}
+
+	// There is space. Insert new key, RecordID pair.
+	insert_pair.key = key;
+	insert_pair.pid = pid;
+	locate(key, eid);
+
+	// eid now contains index entry number to insert into)
+	char *temp_buffer = (char *) malloc(PageFile::PAGE_SIZE);
+
+	// Copy the first eid KRPairs into the temp buffer.
+	// The element to insert will come after these.
+	// Then copy the rest of the buffer after the element
+	offset = BTNonLeafNode::BEGINNING_OFFSET + (sizeof(KPPair) * eid);
+	memcpy(temp_buffer, buffer, offset);
+	memcpy(temp_buffer + offset, &insert_pair, sizeof(KPPair));
+	memcpy(temp_buffer + offset + sizeof(KPPair), buffer + offset, 
+		PageFile::PAGE_SIZE - offset);
+
+	// Move the newly constructed buffer back into the buffer variable
+	memcpy(buffer, temp_buffer, PageFile::PAGE_SIZE);
+
+	// Free temp_buffer to prevent memory leak
+	free(temp_buffer);
+
+	// Increase num_keys.
+	num_keys++;
+	setKeyCount(num_keys);
 	return 0;
 }
 
@@ -362,6 +556,31 @@ RC BTNonLeafNode::setKeyCount(int new_count)
 	}
 	int *cur_count = (int*) buffer;
 	*cur_count = new_count;
+	return 0;
+}
+
+/**
+* Return the pid of the current node.
+* @return the PageId of the current node
+*/
+PageId BTNonLeafNode::getPID()
+{
+	PageId *pid = (PageId *) (buffer + sizeof(int));
+	return *pid;
+}
+
+/**
+* Set the pid of the current node.
+* @param pid[IN] the PageId of the current node
+* @return 0 if successful. Return an error code if there is an error.
+*/
+RC BTNonLeafNode::setPID(PageId pid)
+{
+	if (pid < 0)
+		return RC_INVALID_ATTRIBUTE;
+
+	PageId *cur_pid = (PageId *) (buffer + sizeof(int));
+	*cur_pid = pid;
 	return 0;
 }
 
@@ -406,7 +625,17 @@ RC BTNonLeafNode::locate(int searchKey, int& eid)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
-{ return 0; }
+{ 
+	int eid;
+	KPPair *target;
+
+	if (pid < 0) {
+		return RC_INVALID_PID;
+	}
+	// TODO: FINISH
+
+	return 0; 
+}
 
 /*
  * Initialize the root node with (pid1, key, pid2).

@@ -28,12 +28,17 @@ class BTLeafNode {
     /**
     * First 4 bytes is key count.
     */
-    static const int BEGINNING_OFFSET = sizeof(int);
+    static const int BEGINNING_OFFSET = sizeof(int);// + sizeof(PageId);
 
     /**
      * Constructor for Leaf Node.
      */
     BTLeafNode();
+
+    /*
+     * A test function.
+     */
+    void test();
 
    /**
     * Insert the (key, rid) pair to the node.
@@ -56,14 +61,6 @@ class BTLeafNode {
     * @return 0 if successful. Return an error code if there is an error.
     */
     RC insertAndSplit(int key, const RecordId& rid, BTLeafNode& sibling, int& siblingKey);
-
-    /**
-     * Set the key count in the buffer. The key count is contained in the first
-     * four bytes of the buffer.
-     * @param new_count[IN] The new key count
-     * @return 0 if successful. Return an error code if there is an error.
-     */
-    RC setKeyCount(int new_count);
 
    /**
     * If searchKey exists in the node, set eid to the index entry
@@ -105,6 +102,27 @@ class BTLeafNode {
     * @return the number of keys in the node
     */
     int getKeyCount();
+
+    /**
+     * Set the key count in the buffer. The key count is contained in the first
+     * four bytes of the buffer.
+     * @param new_count[IN] The new key count
+     * @return 0 if successful. Return an error code if there is an error.
+     */
+    RC setKeyCount(int new_count);
+
+    /**
+    * Return the pid of the current node.
+    * @return the PageId of the current node
+    */
+    PageId getPID();
+
+   /**
+    * Set the pid of the current node.
+    * @param pid[IN] the PageId of the current node
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    RC setPID(PageId pid);
  
    /**
     * Read the content of the node from the page pid in the PageFile pf.
@@ -154,7 +172,7 @@ class BTNonLeafNode {
     /**
     * First 4 bytes is key count. Then first PageId
     */
-    static const int BEGINNING_OFFSET = sizeof(int) + sizeof(PageId);
+    static const int BEGINNING_OFFSET = sizeof(int) + sizeof(PageId);//2*sizeof(PageId);
 
     /**
      * Constructor for Leaf Node.
@@ -183,14 +201,6 @@ class BTNonLeafNode {
     * @return 0 if successful. Return an error code if there is an error.
     */
     RC insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey);
-
-    /**
-     * Set the key count in the buffer. The key count is contained in the first
-     * four bytes of the buffer.
-     * @param new_count[IN] The new key count
-     * @return 0 if successful. Return an error code if there is an error.
-     */
-    RC setKeyCount(int new_count);
 
     /**
     * If searchKey exists in the node, set eid to the index entry
@@ -229,6 +239,27 @@ class BTNonLeafNode {
     * @return the number of keys in the node
     */
     int getKeyCount();
+
+    /**
+     * Set the key count in the buffer. The key count is contained in the first
+     * four bytes of the buffer.
+     * @param new_count[IN] The new key count
+     * @return 0 if successful. Return an error code if there is an error.
+     */
+    RC setKeyCount(int new_count);
+
+    /**
+    * Return the pid of the current node.
+    * @return the PageId of the current node
+    */
+    PageId getPID();
+
+   /**
+    * Set the pid of the current node.
+    * @param pid[IN] the PageId of the current node
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    RC setPID(PageId pid);
 
    /**
     * Read the content of the node from the page pid in the PageFile pf.
