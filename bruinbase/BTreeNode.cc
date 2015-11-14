@@ -25,16 +25,27 @@ BTLeafNode::BTLeafNode()
 	memset(buffer, 0, PageFile::PAGE_SIZE); 
 }
 
+void BTLeafNode::printAll() {
+	int *keycount = (int *) buffer;
+	cout << "Key count: " << *keycount << endl;
+
+	KRPair *kp = (KRPair *) (buffer + BTLeafNode::BEGINNING_OFFSET);
+	for (int i = 0; i < *keycount; i++) {
+		cout << (kp + i)->key << ", ";
+	}
+	cout << endl << "---" << endl;
+}
+
 void BTLeafNode::test()
 {
 	int eid, key;
 	RecordId rid, insert_rid;
 	
 	// no keys initially
-	cout << ( getKeyCount() == 0 );
+	assert ( getKeyCount() == 0 );
 	
 	// the key 0 is not in the node
-	cout << ( locate(0, eid) == RC_NO_SUCH_RECORD );
+	assert ( locate(0, eid) == RC_NO_SUCH_RECORD );
 	
 	// we can't read entries in the empty node
 	for (int i = 0; i < 84; i++)
@@ -52,26 +63,26 @@ void BTLeafNode::test()
 	insert( 7,  insert_rid  );
 		
 	// 4 keys now in the node
-	cout << ( getKeyCount() == 4 );
+	assert ( getKeyCount() == 4 );
 	
 	// next node ptr has PageID 25
-	cout << ( getNextNodePtr() == 25 );
+	assert ( getNextNodePtr() == 25 );
 	
 	// the key 13 isn't in the node
-	cout << ( locate(13, eid) == RC_NO_SUCH_RECORD );
+	assert ( locate(13, eid) == RC_NO_SUCH_RECORD );
 	
 	// the key 7 is in the node
-	cout << ( locate(7,  eid) == 0);
+	assert ( locate(7,  eid) == 0);
 	
 	// 7 is the key of the third entry in the node
-	cout << ( eid == 2 );
+	assert ( eid == 2 );
 
 	// there is no fifth entry in the node
-	cout << ( readEntry(4, key, rid) == RC_INVALID_CURSOR );
+	assert ( readEntry(4, key, rid) == RC_INVALID_CURSOR );
 	
 	// the first entry in the node has a key of 0 and RecordID of (9, 5)
-	cout << ( readEntry(0, key, rid) == 0 );
-	cout << ( key == 0 && rid.pid == 9 && rid.sid == 5);
+	assert ( readEntry(0, key, rid) == 0 );
+	assert ( key == 0 && rid.pid == 9 && rid.sid == 5);
 	
 	for (int i = 20; i < 100; i++)
 	{
@@ -83,23 +94,22 @@ void BTLeafNode::test()
 	/* This should be the key layout right now:
 	 * 0 4 7 12 21 22 23 24 25 ... 100
 	*/
-	
 	// we now have 84 keys
-	cout << ( getKeyCount() == 84);
+	assert ( getKeyCount() == 84 );
 	
 	// can't insert any more keys
 	insert_rid.pid = 2; insert_rid.sid = 2;
-	cout << ( insert(200, insert_rid ) == RC_NODE_FULL );
-	cout << ( locate(200, eid) == RC_NO_SUCH_RECORD );
+	assert ( insert(200, insert_rid ) == RC_NODE_FULL );
+	assert ( locate(200, eid) == RC_NO_SUCH_RECORD );
 	
 	locate(100, eid);
 	
 	// eid of last key is 83
-	cout << (eid == 83);
+	assert ( eid == 83 );
 
 	// the sixth entry has a key of 22 and a RecordID of (98, 1)
-	cout << ( readEntry(5, key, rid) == 0 );
-	cout << ( key == 22 && rid.pid == 98 && rid.sid == 1 );
+	assert ( readEntry(5, key, rid) == 0 );
+	assert ( key == 22 && rid.pid == 98 && rid.sid == 1 );
 	
 	BTLeafNode new_sibling;
 	int first_key_in_sibling;
@@ -108,34 +118,34 @@ void BTLeafNode::test()
 	
 	//PageID saved_next = getNextNodePtr();
 	insert_rid.pid = 4; insert_rid.sid = 10;
-	cout <<  ( insertAndSplit(20, insert_rid, new_sibling, first_key_in_sibling) == 0 );
+	assert  ( insertAndSplit(20, insert_rid, new_sibling, first_key_in_sibling) == 0 );
 	
 	// left node has 43 keys, right node has 42 keys
-	cout <<  ( getKeyCount() == 43 && new_sibling.getKeyCount() == 42);
+	assert  ( getKeyCount() == 43 && new_sibling.getKeyCount() == 42);
 	
 	// left node points to right node
-	//cout <<  ( getNextNodePtr() == new_sibling.getPID() );
+	//assert  ( getNextNodePtr() == new_sibling.getPID() );
 	
 	// right node points to what left node pointed to before the insert
-	//cout <<  ( new_sibling.getNextNodePtr() == saved_next );
-	
-	// the last entry in the left node has a key of 59 after the split
-	cout <<  ( locate(59, eid) == 0 );
-	cout <<  ( eid == 42 );
+	//assert  ( new_sibling.getNextNodePtr() == saved_next );
+	// the last entry in the left node has a key of 58 after the split
+	assert  ( locate(58, eid) == 0 );
+	assert  ( eid == 42 );
 	
 	// the entry with key=60 is not in the left node. it is the first key in the right node
-	cout <<  ( locate(60, eid) == RC_NO_SUCH_RECORD );
-	cout <<  ( first_key_in_sibling = 60 );
-	cout <<  ( new_sibling.locate(60, eid) == 0 );
-	cout <<  ( eid == 0 );
+
+	assert  ( locate(59, eid) == RC_NO_SUCH_RECORD );
+	assert  ( first_key_in_sibling == 59 );
+	assert  ( new_sibling.locate(59, eid) == 0 );
+	assert  ( eid == 0 );
 	
 	// the second key in the right node is 61
-	cout <<  ( new_sibling.locate(61, eid) == 0 );
-	cout <<  ( eid == 1 );
+	assert  ( new_sibling.locate(60, eid) == 0 );
+	assert  ( eid == 1 );
 	
 	// the last key in the new sibling is 100 with a RecordID (20, 1)
-	cout <<  ( new_sibling.readEntry(41, key, rid) == 0 );
-	cout <<  ( key == 100 && rid.pid == 20 && rid.sid == 1 );
+	assert  ( new_sibling.readEntry(41, key, rid) == 0 );
+	assert  ( key == 100 && rid.pid == 20 && rid.sid == 1 );
 	
 	
 	cerr << "All tests successful.\n";	
@@ -198,6 +208,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	int eid;
 	int offset;
 	KRPair insert_pair;
+	PageId next_node = getNextNodePtr();
 
 	// If no space, return error code
 	if (num_keys >= BTLeafNode::MAX_LEAF_KEYS) {
@@ -210,7 +221,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	locate(key, eid);
 
 	// eid now contains index entry number to insert into)
-	char *temp_buffer = (char *) malloc(PageFile::PAGE_SIZE);
+	char *temp_buffer = (char *) malloc(PageFile::PAGE_SIZE * sizeof(char));
 
 	// Copy the first eid KRPairs into the temp buffer.
 	// The element to insert will come after these.
@@ -219,7 +230,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	memcpy(temp_buffer, buffer, offset);
 	memcpy(temp_buffer + offset, &insert_pair, sizeof(KRPair));
 	memcpy(temp_buffer + offset + sizeof(KRPair), buffer + offset, 
-		PageFile::PAGE_SIZE - offset);
+		num_keys * sizeof(KRPair) - (sizeof(KRPair) * eid));
 
 	// Move the newly constructed buffer back into the buffer variable
 	memcpy(buffer, temp_buffer, PageFile::PAGE_SIZE);
@@ -230,6 +241,7 @@ RC BTLeafNode::insert(int key, const RecordId& rid)
 	// Increase num_keys.
 	num_keys++;
 	setKeyCount(num_keys);
+	setNextNodePtr(next_node);
 	return 0;
 }
 
@@ -252,6 +264,8 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	int pivot; // Contains the eid of the pair at which we are splitting
 	int offset;
 	int side = 0; // 0 = left, 1 = right
+	int left_keys;
+	int right_keys;
 
 	// Check that sibling is EMPTY
 	if (sibling.getKeyCount() != 0)
@@ -263,13 +277,16 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 
 	locate(key, eid);
 	// Split consistently, such that left node has more keys.
-	if (eid < (num_keys/2)) {
+	if (eid <= (num_keys/2)) {
 		pivot = num_keys/2;
 	} 
 	else {
 		pivot = num_keys/2 + 1;
 		side = 1;
 	}
+	left_keys = pivot;
+	right_keys = num_keys - pivot;
+
 	offset = BTLeafNode::BEGINNING_OFFSET + (sizeof(KRPair) * pivot);
 
 	// Clear sibling anyways. 
@@ -279,15 +296,13 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 		PageFile::PAGE_SIZE - sizeof(PageId) - offset);
 	// Sibling points to the next node that the original node was pointing to
 	sibling.setNextNodePtr(getNextNodePtr());
-	// Number of keys in sibling is always half
-	sibling.setKeyCount(num_keys/2);
+	sibling.setKeyCount(right_keys);
 
 	// Clear second half of buffer.
 	memset(buffer + offset, 0, PageFile::PAGE_SIZE - sizeof(PageId) - offset);
+	setKeyCount(left_keys);
 	// Set this node to point to the new sibling
 	//setNextNodePtr(sibling.getPID());
-	// Set number of keys. Is always half + 1
-	setKeyCount((num_keys/2) + 1);
 
 	// Insert new key, rid pair into correct leaf node.
 	if (side) {
@@ -298,7 +313,7 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 	}
 
 	// siblingKey = first key in sibling node.
-	siblingKey = ((KRPair *) sibling.buffer)->key;
+	siblingKey = ((KRPair *) (sibling.buffer + BTLeafNode::BEGINNING_OFFSET))->key;
 	return 0; 
 }
 
@@ -340,13 +355,13 @@ RC BTLeafNode::locate(int searchKey, int& eid)
 	// Else if the current key is greater than the searchKey, then the 
 	// searchKey does not exist. Stop and return the eid of the first larger element.
 	for (eid = 0; eid < keycount; eid++) {
-		if (cur->key == searchKey) {
+		if ((cur + eid)->key == searchKey) {
 			return 0;
 		}
-		else if (cur->key > searchKey) {
+		else if ((cur + eid)->key > searchKey) {
 			return RC_NO_SUCH_RECORD;
 		}
-		cur++;
+		// cur++;
 	}
 	return RC_NO_SUCH_RECORD; 
 }
