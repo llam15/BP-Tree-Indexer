@@ -132,14 +132,13 @@ void BTLeafNode::test()
 	assert  ( locate(58, eid) == 0 );
 	assert  ( eid == 42 );
 	
-	// the entry with key=60 is not in the left node. it is the first key in the right node
-
+	// the entry with key=59 is not in the left node. it is the first key in the right node
 	assert  ( locate(59, eid) == RC_NO_SUCH_RECORD );
 	assert  ( first_key_in_sibling == 59 );
 	assert  ( new_sibling.locate(59, eid) == 0 );
 	assert  ( eid == 0 );
 	
-	// the second key in the right node is 61
+	// the second key in the right node is 60
 	assert  ( new_sibling.locate(60, eid) == 0 );
 	assert  ( eid == 1 );
 	
@@ -463,6 +462,17 @@ BTNonLeafNode::BTNonLeafNode()
 	memset(buffer, 0, PageFile::PAGE_SIZE); 
 }
 
+void BTNonLeafNode::printAll() {
+	int *keycount = (int *) buffer;
+	cout << "Key count: " << *keycount << endl;
+
+	KPPair *kp = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET);
+	for (int i = 0; i < *keycount; i++) {
+		cout << (kp + i)->key << ", ";
+	}
+	cout << endl << "---" << endl;
+}
+
 /*
  * Read the content of the node from the page pid in the PageFile pf.
  * @param pid[IN] the PageId to read
@@ -512,7 +522,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	KPPair insert_pair;
 
 	// If no space, return error code
-	if (num_keys >= BTNonLeafNode::MAX_NON_KEYS) {
+	if (num_keys >= BTLeafNode::MAX_LEAF_KEYS) {
 		return RC_NODE_FULL;
 	}
 
@@ -522,7 +532,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	locate(key, eid);
 
 	// eid now contains index entry number to insert into)
-	char *temp_buffer = (char *) malloc(PageFile::PAGE_SIZE);
+	char *temp_buffer = (char *) malloc(PageFile::PAGE_SIZE * sizeof(char));
 
 	// Copy the first eid KRPairs into the temp buffer.
 	// The element to insert will come after these.
@@ -531,7 +541,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	memcpy(temp_buffer, buffer, offset);
 	memcpy(temp_buffer + offset, &insert_pair, sizeof(KPPair));
 	memcpy(temp_buffer + offset + sizeof(KPPair), buffer + offset, 
-		PageFile::PAGE_SIZE - offset);
+		num_keys * sizeof(KPPair) - (sizeof(KPPair) * eid));
 
 	// Move the newly constructed buffer back into the buffer variable
 	memcpy(buffer, temp_buffer, PageFile::PAGE_SIZE);
@@ -556,7 +566,67 @@ RC BTNonLeafNode::insert(int key, PageId pid)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey)
-{ return 0; }
+{ 
+	KRPair insert_pair;
+	int eid;
+	int num_keys = getKeyCount();
+	int pivot; // Contains the eid of the pair at which we are splitting
+	int offset;
+	int side = 0; // 0 = left, 1 = right
+	int left_keys;
+	int right_keys;
+
+	// Check that sibling is EMPTY
+	if (sibling.getKeyCount() != 0)
+		return RC_INVALID_ATTRIBUTE;
+
+	// Only split if the current node is FULL
+	if (num_keys < BTNonLeafNode::MAX_NON_KEYS)
+		return RC_INVALID_ATTRIBUTE;
+
+	locate(key, eid);
+	// Split consistently, such that left node has more keys.
+	if (eid <= (num_keys/2)) {
+		pivot = num_keys/2;
+	} 
+	else {
+		pivot = num_keys/2 + 1;
+		side = 1;
+	}
+	left_keys = pivot;
+	right_keys = num_keys - pivot - 1;
+
+	offset = BTNonLeafNode::BEGINNING_OFFSET + (sizeof(KPPair) * pivot);
+
+	// Copy middle key value
+	memcpy(&midKey, buffer + offset, sizeof(int));
+
+	// Skip over middle key. Do not copy to sibling
+	offset += sizeof(KPPair);
+	// Clear sibling anyways. 
+	memset(sibling.buffer, 0, PageFile::PAGE_SIZE);
+	// Move second half of buffer to sibling.
+	memcpy(sibling.buffer + BTNonLeafNode::BEGINNING_OFFSET, buffer + offset, 
+		PageFile::PAGE_SIZE - offset);
+
+	sibling.setKeyCount(right_keys);
+
+	// Clear second half of buffer.
+	memset(buffer + offset, 0, PageFile::PAGE_SIZE - offset);
+	setKeyCount(left_keys);
+	// Set this node to point to the new sibling
+	//setNextNodePtr(sibling.getPID());
+
+	// Insert new key, rid pair into correct leaf node.
+	if (side) {
+		sibling.insert(key, rid);
+	}
+	else {
+		insert(key, rid);
+	}
+	
+	return 0; 
+}
 
 /**
  * Set the key count in the buffer. The key count is contained in the first
@@ -641,14 +711,22 @@ RC BTNonLeafNode::locate(int searchKey, int& eid)
  */
 RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
 { 
-	int eid;
 	KPPair *target;
+	int num_keys = getKeyCount();
 
 	if (pid < 0) {
 		return RC_INVALID_PID;
 	}
-	// TODO: FINISH
+	
+	target = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET)
+	for (int i = 0; i < num_keys; i++) {
+		if (searchKey < (target + i)->key) {
+			pid = (target + i - 1)->pid;
+			return 0;
+		}
 
+	}
+	pid = (target + i - 1)->pid;
 	return 0; 
 }
 
@@ -660,4 +738,11 @@ RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
  * @return 0 if successful. Return an error code if there is an error.
  */
 RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
-{ return 0; }
+{ 
+	if (pid1 < 0 || pid2 < 0) {
+		return RC_INVALID_PID;
+	}
+	memset(buffer, 0, PageFile::PAGE_SIZE);
+	memcpy(buffer + sizeof(int), &pid, sizeof(PageId));
+	insert(key, pid2);
+}
