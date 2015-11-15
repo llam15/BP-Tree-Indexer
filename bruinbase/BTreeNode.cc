@@ -473,6 +473,99 @@ void BTNonLeafNode::printAll() {
 	cout << endl << "---" << endl;
 }
 
+void BTNonLeafNode::test()
+{
+	int eid;
+	
+	// no keys initially
+	assert ( getKeyCount() == 0 );
+	
+	// the key 0 is not in the node
+	assert ( locate(0, eid) == RC_NO_SUCH_RECORD );
+
+	insert( 3,  4  );
+	insert( 1,  11 );
+	insert( 2,  5  );
+	insert( 0,  9  );
+		
+	// 4 keys now in the node
+	assert ( getKeyCount() == 4 );
+	
+	// the key 13 isn't in the node
+	assert ( locate(13, eid) == RC_NO_SUCH_RECORD );
+	
+	// the key 2 is in the node
+	assert ( locate(2,  eid) == 0);
+	
+	// 2 is the key of the third entry in the node
+	assert ( eid == 2 );
+	
+	// the first entry in the node has a key of 0
+	assert ( locate(0, eid) == 0 );
+	assert ( eid == 0 );
+	
+	for (int i = 10; i < BTNonLeafNode::MAX_NON_KEYS + 6; i++)
+	{
+		insert( i, 1 );			
+	}
+	/* This should be the key layout right now:
+	 * 0 1 2 3 10 11 12 ... 132
+	*/
+	
+	// we now have 127 keys
+	assert ( getKeyCount() == BTNonLeafNode::MAX_NON_KEYS );
+	
+	// can't insert any more keys
+	assert ( insert(200, 3 ) == RC_NODE_FULL );
+	assert ( locate(200, eid) == RC_NO_SUCH_RECORD );
+	
+	// eid of last key is 126
+	locate(132, eid);
+	assert ( eid == 126 );
+
+	// the sixth entry has a key of 11 
+	assert ( locate(11, eid)  == 0 );
+	assert ( eid == 5 );
+	
+	BTNonLeafNode sibling;
+	int midkey;
+	
+	// try to insert the key 8 and PageId 9
+	
+	assert  ( insertAndSplit(8, 9, sibling, midkey) == 0 );
+	sibling.printAll();
+	printAll();
+	// left node has 64 keys, right node has 63 keys
+	assert  ( getKeyCount() == 64 && sibling.getKeyCount() == 63 );
+	
+	// the middle key is 69
+	assert  ( midkey == 69 );
+	
+	// the last key in the left node is 68
+	assert  ( locate(68, eid) == 0 );
+	assert  ( eid == 63 );
+	
+	// the key 69 is not in the left node or right node
+	assert  ( locate(69, eid) == RC_NO_SUCH_RECORD && sibling.locate(69, eid) == RC_NO_SUCH_RECORD );
+
+	// the key 70 is not in the left node.  it is the first key in the right node.
+	assert  ( locate(70, eid) == RC_NO_SUCH_RECORD );
+	assert  ( sibling.locate(70, eid) == 0 );
+	assert  ( eid  == 0 );
+	
+	// the second key in the right node is 71
+	assert  ( sibling.locate(71, eid) == 0 );
+	assert  ( eid == 1 );
+	
+	// the last key in the right node is 132
+	assert  ( sibling.locate(132, eid) == 0 );
+	assert  ( eid == 62 );
+	
+	
+	cerr << "All tests successful.\n";	
+}
+
+
 /*
  * Read the content of the node from the page pid in the PageFile pf.
  * @param pid[IN] the PageId to read
@@ -522,7 +615,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 	KPPair insert_pair;
 
 	// If no space, return error code
-	if (num_keys >= BTLeafNode::MAX_LEAF_KEYS) {
+	if (num_keys >= BTNonLeafNode::MAX_NON_KEYS) {
 		return RC_NODE_FULL;
 	}
 
@@ -567,7 +660,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
  */
 RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey)
 { 
-	KRPair insert_pair;
+	KPPair insert_pair;
 	int eid;
 	int num_keys = getKeyCount();
 	int pivot; // Contains the eid of the pair at which we are splitting
@@ -619,12 +712,12 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 
 	// Insert new key, rid pair into correct leaf node.
 	if (side) {
-		sibling.insert(key, rid);
+		sibling.insert(key, pid);
 	}
 	else {
-		insert(key, rid);
+		insert(key, pid);
 	}
-	
+
 	return 0; 
 }
 
@@ -713,13 +806,14 @@ RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
 { 
 	KPPair *target;
 	int num_keys = getKeyCount();
+	int i;
 
 	if (pid < 0) {
 		return RC_INVALID_PID;
 	}
 	
-	target = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET)
-	for (int i = 0; i < num_keys; i++) {
+	target = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET);
+	for (i = 0; i < num_keys; i++) {
 		if (searchKey < (target + i)->key) {
 			pid = (target + i - 1)->pid;
 			return 0;
@@ -743,6 +837,6 @@ RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
 		return RC_INVALID_PID;
 	}
 	memset(buffer, 0, PageFile::PAGE_SIZE);
-	memcpy(buffer + sizeof(int), &pid, sizeof(PageId));
+	memcpy(buffer + sizeof(int), &pid1, sizeof(PageId));
 	insert(key, pid2);
 }
