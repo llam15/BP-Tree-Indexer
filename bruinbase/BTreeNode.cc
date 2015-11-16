@@ -56,7 +56,7 @@ void BTLeafNode::test()
 	insert_rid.pid = 11; insert_rid.sid = 1;
 	insert( 12, insert_rid  );
 	insert_rid.pid = 0;  insert_rid.sid = 12;
-	insert( 4,  insert_rid  );
+	insert( -4,  insert_rid  );
 	insert_rid.pid = 9;  insert_rid.sid = 5;
 	insert( 0,  insert_rid  );
 	insert_rid.pid = 7;  insert_rid.sid = 8;
@@ -82,7 +82,7 @@ void BTLeafNode::test()
 	
 	// the first entry in the node has a key of 0 and RecordID of (9, 5)
 	assert ( readEntry(0, key, rid) == 0 );
-	assert ( key == 0 && rid.pid == 9 && rid.sid == 5);
+	assert ( key == -4 && rid.pid == 0 && rid.sid == 12);
 	
 	for (int i = 20; i < 100; i++)
 	{
@@ -418,31 +418,6 @@ RC BTLeafNode::setNextNodePtr(PageId pid)
 	return 0; 
 }
 
-/**
-* Return the pid of the current node.
-* @return the PageId of the current node
-*/
-PageId BTLeafNode::getPID()
-{
-	PageId *pid = (PageId *) (buffer + sizeof(int));
-	return *pid;
-}
-
-/**
-* Set the pid of the current node.
-* @param pid[IN] the PageId of the current node
-* @return 0 if successful. Return an error code if there is an error.
-*/
-RC BTLeafNode::setPID(PageId pid)
-{
-	if (pid < 0)
-		return RC_INVALID_ATTRIBUTE;
-
-	PageId *cur_pid = (PageId *) (buffer + sizeof(int));
-	*cur_pid = pid;
-	return 0;
-}
-
 //////////////////////////////////////////////////////////////
 //                      BT NONLEAF NODE                     //
 //////////////////////////////////////////////////////////////
@@ -463,12 +438,14 @@ BTNonLeafNode::BTNonLeafNode()
 }
 
 void BTNonLeafNode::printAll() {
-	int *keycount = (int *) buffer;
-	cout << "Key count: " << *keycount << endl;
+	int *beginning = (int *) buffer;
+	cout << "Key count: " << *beginning << endl;
+
+	cout << *(beginning + 1) << " | ";
 
 	KPPair *kp = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET);
-	for (int i = 0; i < *keycount; i++) {
-		cout << (kp + i)->key << ", ";
+	for (int i = 0; i < *beginning; i++) {
+		cout << (kp + i)->key << ", " << (kp + i)->pid << " | ";
 	}
 	cout << endl << "---" << endl;
 }
@@ -482,8 +459,7 @@ void BTNonLeafNode::test()
 	
 	// the key 0 is not in the node
 	assert ( locate(0, eid) == RC_NO_SUCH_RECORD );
-
-	insert( 3,  4  );
+	initializeRoot(1, 3, 4);
 	insert( 1,  11 );
 	insert( 2,  5  );
 	insert( 0,  9  );
@@ -506,7 +482,12 @@ void BTNonLeafNode::test()
 	
 	for (int i = 10; i < BTNonLeafNode::MAX_NON_KEYS + 6; i++)
 	{
-		insert( i, 1 );			
+		if (i == 69) {
+			insert (5, 95);
+		}
+		else{
+			insert( i, 100-i );
+		}
 	}
 	/* This should be the key layout right now:
 	 * 0 1 2 3 10 11 12 ... 132
@@ -524,17 +505,18 @@ void BTNonLeafNode::test()
 	assert ( eid == 126 );
 
 	// the sixth entry has a key of 11 
-	assert ( locate(11, eid)  == 0 );
-	assert ( eid == 5 );
+	// assert ( locate(11, eid)  == 0 );
+	// assert ( eid == 5 );
 	
 	BTNonLeafNode sibling;
 	int midkey;
 	
 	// try to insert the key 8 and PageId 9
-	
-	assert  ( insertAndSplit(8, 9, sibling, midkey) == 0 );
-	sibling.printAll();
 	printAll();
+	assert  ( insertAndSplit(69, 9, sibling, midkey) == 0 );
+	printAll();
+	sibling.printAll();
+	cout << midkey << endl;
 	// left node has 64 keys, right node has 63 keys
 	assert  ( getKeyCount() == 64 && sibling.getKeyCount() == 63 );
 	
@@ -661,6 +643,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
 RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey)
 { 
 	KPPair insert_pair;
+	KPPair mid_pair;
 	int eid;
 	int num_keys = getKeyCount();
 	int pivot; // Contains the eid of the pair at which we are splitting
@@ -686,18 +669,29 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 		pivot = num_keys/2 + 1;
 		side = 1;
 	}
-	left_keys = pivot;
-	right_keys = num_keys - pivot - 1;
 
 	offset = BTNonLeafNode::BEGINNING_OFFSET + (sizeof(KPPair) * pivot);
 
-	// Copy middle key value
-	memcpy(&midKey, buffer + offset, sizeof(int));
+	// Inserted value is middle key
+	if (eid == pivot) {
+		left_keys = pivot;
+		right_keys = num_keys - pivot;
+		mid_pair.key = key;
+		mid_pair.pid = pid;
+	}
+	else {
+		left_keys = pivot;
+		right_keys = num_keys - pivot - 1;
+		mid_pair = *((KPPair *) (buffer + offset));
+		// Skip over middle key. Do not copy to sibling
+		offset += sizeof(KPPair);
+	}
 
-	// Skip over middle key. Do not copy to sibling
-	offset += sizeof(KPPair);
+	memcpy(&midKey, &mid_pair, sizeof(int));
+
 	// Clear sibling anyways. 
 	memset(sibling.buffer, 0, PageFile::PAGE_SIZE);
+	memcpy(sibling.buffer + sizeof(int), &mid_pair.pid, sizeof(PageId));
 	// Move second half of buffer to sibling.
 	memcpy(sibling.buffer + BTNonLeafNode::BEGINNING_OFFSET, buffer + offset, 
 		PageFile::PAGE_SIZE - offset);
@@ -710,14 +704,15 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 	// Set this node to point to the new sibling
 	//setNextNodePtr(sibling.getPID());
 
-	// Insert new key, rid pair into correct leaf node.
-	if (side) {
-		sibling.insert(key, pid);
+	if (eid != pivot) {
+		// Insert new key, rid pair into correct leaf node.
+		if (side) {
+			sibling.insert(key, pid);
+		}
+		else {
+			insert(key, pid);
+		}
 	}
-	else {
-		insert(key, pid);
-	}
-
 	return 0; 
 }
 
@@ -734,31 +729,6 @@ RC BTNonLeafNode::setKeyCount(int new_count)
 	}
 	int *cur_count = (int*) buffer;
 	*cur_count = new_count;
-	return 0;
-}
-
-/**
-* Return the pid of the current node.
-* @return the PageId of the current node
-*/
-PageId BTNonLeafNode::getPID()
-{
-	PageId *pid = (PageId *) (buffer + sizeof(int));
-	return *pid;
-}
-
-/**
-* Set the pid of the current node.
-* @param pid[IN] the PageId of the current node
-* @return 0 if successful. Return an error code if there is an error.
-*/
-RC BTNonLeafNode::setPID(PageId pid)
-{
-	if (pid < 0)
-		return RC_INVALID_ATTRIBUTE;
-
-	PageId *cur_pid = (PageId *) (buffer + sizeof(int));
-	*cur_pid = pid;
 	return 0;
 }
 
@@ -839,4 +809,5 @@ RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
 	memset(buffer, 0, PageFile::PAGE_SIZE);
 	memcpy(buffer + sizeof(int), &pid1, sizeof(PageId));
 	insert(key, pid2);
+	return 0;
 }

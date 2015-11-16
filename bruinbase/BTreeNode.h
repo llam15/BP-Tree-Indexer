@@ -113,19 +113,6 @@ class BTLeafNode {
      */
     RC setKeyCount(int new_count);
 
-    /**
-    * Return the pid of the current node.
-    * @return the PageId of the current node
-    */
-    PageId getPID();
-
-   /**
-    * Set the pid of the current node.
-    * @param pid[IN] the PageId of the current node
-    * @return 0 if successful. Return an error code if there is an error.
-    */
-    RC setPID(PageId pid);
- 
    /**
     * Read the content of the node from the page pid in the PageFile pf.
     * @param pid[IN] the PageId to read
@@ -251,19 +238,6 @@ class BTNonLeafNode {
      * @return 0 if successful. Return an error code if there is an error.
      */
     RC setKeyCount(int new_count);
-
-    /**
-    * Return the pid of the current node.
-    * @return the PageId of the current node
-    */
-    PageId getPID();
-
-   /**
-    * Set the pid of the current node.
-    * @param pid[IN] the PageId of the current node
-    * @return 0 if successful. Return an error code if there is an error.
-    */
-    RC setPID(PageId pid);
 
    /**
     * Read the content of the node from the page pid in the PageFile pf.
