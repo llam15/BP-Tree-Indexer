@@ -35,6 +35,8 @@ class BTreeIndex {
  public:
   BTreeIndex();
 
+  void printAll();
+
   /**
    * Open the index file in read or write mode.
    * Under 'w' mode, the index file should be created if it does not exist.
@@ -59,6 +61,18 @@ class BTreeIndex {
   RC insert(int key, const RecordId& rid);
 
   /**
+   * Recursive helper for insert function.
+   * @param key[IN] the key for the value inserted into the index
+   * @param rid[IN] the RecordId for the record being inserted into the index
+   * @param height[IN] the height of the tree we are currently at
+   * @param pid[IN] the pid of the node we are currently at
+   * @param overflow_key[OUT] contains the key if a node is split (used for propagating upwards)
+   * @param overflow_pid[OUT] contains the pid of the new node (from splitting. used for propagating upwards)
+   * @return 1 if overflow, error code if error, otherwise 0.
+   */
+  RC recursiveInsert(int key, const RecordId& rid, int height, PageId pid, int& overflow_key, PageId& overflow_pid);
+
+  /**
    * Run the standard B+Tree key search algorithm and identify the
    * leaf node where searchKey may exist. If an index entry with
    * searchKey exists in the leaf node, set IndexCursor to its location 
@@ -77,6 +91,7 @@ class BTreeIndex {
    * @return 0 if searchKey is found. Othewise, an error code
    */
   RC locate(int searchKey, IndexCursor& cursor);
+  RC recursiveLocate(int searchKey, IndexCursor& cursor, PageId pid, int depth_count);
 
   /**
    * Read the (key, rid) pair at the location specified by the index cursor,
@@ -97,6 +112,9 @@ class BTreeIndex {
   /// this class is destructed. Make sure to store the values of the two 
   /// variables in disk, so that they can be reconstructed when the index
   /// is opened again later.
+
+  // Buffer of size 1024 to write metadata to disk.
+  char metadata[PageFile::PAGE_SIZE];
 };
 
 #endif /* BTREEINDEX_H */
