@@ -25,14 +25,18 @@ BTLeafNode::BTLeafNode()
 	memset(buffer, 0, PageFile::PAGE_SIZE); 
 }
 
-void BTLeafNode::printAll() {
+void BTLeafNode::printAll(bool keys_only) {
 	int *keycount = (int *) buffer;
-	cout << "Key count: " << *keycount << endl;
+	cout << "[" << *keycount << "] | ";
 
-	KRPair *kp = (KRPair *) (buffer + BTLeafNode::BEGINNING_OFFSET);
+	KRPair *kr = (KRPair *) (buffer + BTLeafNode::BEGINNING_OFFSET);
 	for (int i = 0; i < *keycount; i++) {
-		cout << (kp + i)->key << ", ";
+		if (keys_only)
+			cout << (kr + i)->key << " | ";
+		else
+			cout << (kr + i)->key << ", (" << (kr + i)->rid.pid << ", " << (kr + i)->rid.sid << ") | ";
 	}
+	cout << getNextNodePtr() << " | ";
 	cout << endl << "---" << endl;
 }
 
@@ -437,15 +441,18 @@ BTNonLeafNode::BTNonLeafNode()
 	memset(buffer, 0, PageFile::PAGE_SIZE); 
 }
 
-void BTNonLeafNode::printAll() {
+void BTNonLeafNode::printAll(bool keys_only) {
 	int *beginning = (int *) buffer;
-	cout << "Key count: " << *beginning << endl;
+	cout << "[" << *beginning << "] | ";
 
 	cout << *(beginning + 1) << " | ";
 
 	KPPair *kp = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET);
 	for (int i = 0; i < *beginning; i++) {
-		cout << (kp + i)->key << ", " << (kp + i)->pid << " | ";
+		if (keys_only)
+			cout << (kp + i)->key << " | ";
+		else
+			cout << (kp + i)->key << ", " << (kp + i)->pid << " | ";
 	}
 	cout << endl << "---" << endl;
 }
@@ -810,4 +817,22 @@ RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
 	memcpy(buffer + sizeof(int), &pid1, sizeof(PageId));
 	insert(key, pid2);
 	return 0;
+}
+
+int BTNonLeafNode::getChildren(PageId *children)
+{
+	KPPair *target;
+	int num_keys = getKeyCount();
+	int num_children = 0;
+	int i;
+
+	if (num_keys == 0)
+		return 0;
+
+	target = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET);
+	for (i = 0; i <= num_keys; i++) {
+		children[i] = (target + i - 1)->pid;
+		num_children++;
+	}
+	return num_children;
 }

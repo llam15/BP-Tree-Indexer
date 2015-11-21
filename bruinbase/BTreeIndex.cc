@@ -10,6 +10,8 @@
 #include "BTreeIndex.h"
 #include "BTreeNode.h"
 #include <string.h>
+#include <queue>
+#include <iostream>
 
 using namespace std;
 
@@ -23,9 +25,161 @@ BTreeIndex::BTreeIndex()
 	memset(metadata, 0, PageFile::PAGE_SIZE);
 }
 
+void BTreeIndex::test() 
+{
+	RC rc;
+	int key; 
+	RecordId rid;
+	RecordId insert_rid; // for inserting
+	IndexCursor cursor;
+	
+	
+	rc = open("test_index", 'w');
+	cerr << "Created index successfully: " << (rc == 0) << endl;
+	cerr << "Initially, the rootPid is -1 and treeHeight is 0: "
+	     << (treeHeight == 0 && rootPid == -1) << endl;
+	
+	insert_rid.pid = 2;  insert_rid.sid = 4;
+	rc = insert(10, insert_rid);
+	cerr << "\n--Inserting key 10 with pid=2, sid=4--\n\n";
+	cerr << "Successfully inserted first element: " << (rc == 0) << endl;
+	cerr << "The root pid is now 1: " << (rootPid == 1) << endl;
+	cerr << "The tree height is now 1: " << (treeHeight == 1) << endl;
+	
+	rc = locate(10, cursor);
+	cerr << "Obtained a cursor pointing to the key=10: " << (rc == 0) << endl;
+	cerr << "cursor.eid is 0: " << (cursor.eid == 0) << endl;
+	cerr << "cursor.pid is 1: " << (cursor.pid == 1) << endl;
+	
+	rc = readForward(cursor, key, rid);
+	cerr << "Was able to read the cursor pointing to the key: " << (rc == 0) << endl;
+	cerr << "Was able to read cursor to get appropriate key and record: " 
+	     << (key == 10 && rid.pid == 2 && rid.sid == 4) << endl;
+	
+	rc = readForward(cursor, key, rid);
+	cerr << "Moving the cursor forward returns an error: " 
+	     << (rc != 0) << endl;
+	
+	insert_rid.pid = 5;  insert_rid.sid = 1;
+	insert(7, insert_rid);
+	cerr << "\n--Inserting key 7 with pid=5, sid=1--\n\n";
+	
+	rc = locate(7, cursor);
+	cerr << "Obtained a cursor pointing to the key=7: " << (rc == 0) << endl;
+	readForward(cursor, key, rid);
+	cerr << "Was able to read cursor to get appropriate key and record: "
+		 << (key == 7 && rid.pid == 5 && rid.sid == 1) << endl;
+	
+	readForward(cursor, key, rid);
+	cerr << "Moving the cursor forward once reads the key=1: "
+		 << (key == 10 && rid.pid == 2 && rid.sid == 4) << endl;
+		 
+	rc = readForward(cursor, key, rid);
+	cerr << "Reading the cursor forward once more makes it invalid: "
+		 << (rc != 0) << endl;
+	
+	cerr << "\n--Inserting 82 more keys: 11 through 92 --\n\n";
+	
+	for (int i = 11; i <= 92; i++)
+	{
+		insert_rid.pid = i + 1;
+		insert_rid.sid = i - 1;
+		insert(i, insert_rid);
+	}
+
+	locate(7, cursor);
+	
+	cerr << "Reading forward through the node...\n";
+	
+	for (int i = 0; i < 84; i++)
+	{
+		rc = readForward(cursor, key, rid);
+
+		if ( i > 1 && key != (i + 9) && rid.pid != (i + 10) && rid.sid != (i + 8) )
+		{
+			cerr << "0";
+		}	
+		// else
+		// {
+		// 	cerr << "1";
+		// }
+	}
+	
+	rc = readForward(cursor, key, rid);
+	
+	cerr << "Reading past the last entry throws an error: " << (rc != 0) << endl;
+	insert_rid.pid = 10;
+	insert_rid.sid = 1;
+	insert(8, insert_rid);
+	for (int i = 92; i <= 134; i++)
+	{
+		insert_rid.pid = i + 1;
+		insert_rid.sid = i - 1;
+		insert(i, insert_rid);
+	}
+	for (int i = -12000; i <= 6; i++)
+	{
+		insert_rid.pid = i + 1;
+		insert_rid.sid = i - 1;
+		insert(i, insert_rid);
+	}
+	printAll();
+	close();
+}
+
+
 void BTreeIndex::printAll()
 {
+	queue<BTNode> nodes;
 
+	if (treeHeight == 0) {
+		cout << "Empty tree" << endl;
+	}
+	else {
+		cout << "Tree Height: " << treeHeight << endl;
+		cout << "===" << endl;
+	}
+
+	BTNode root;
+	root.height = 1;
+	root.pid = rootPid;
+	if (root.height == treeHeight) {
+		root.leaf_type = true;
+	}
+	else {
+		root.leaf_type = false;
+	}
+
+	nodes.push(root);
+
+	while (!nodes.empty()) {
+		BTNode next = nodes.front();
+		nodes.pop();
+
+		if (!next.leaf_type) {
+			BTNonLeafNode nonleaf;
+			nonleaf.read(next.pid, pf);
+			nonleaf.printAll();
+
+			PageId children[128];
+			int num_children = nonleaf.getChildren(children);
+
+			for (int i = 0; i < num_children; i++) {
+				BTNode child_node;
+				child_node.height = next.height + 1;
+				if (child_node.height == treeHeight)
+					child_node.leaf_type = true;
+				else child_node.leaf_type = false;
+				child_node.pid = children[i];
+				nodes.push(child_node);
+			}
+		}
+		else {
+			BTLeafNode leaf;
+			leaf.read(next.pid, pf);
+			leaf.printAll();
+		}
+	}
 }
 
 /*
@@ -157,19 +311,20 @@ RC BTreeIndex::recursiveInsert(int key, const RecordId& rid, int height,
 			if (error = sibling.write(overflow_pid, pf))
 				return error;
 
-			return leaf.write(pid, pf);
-		}
+			if (error = leaf.write(pid, pf))
+				return error;
 
-		// Leaf root was split. Create a nonleaf to point to the two leaves
-		if (treeHeight == 1) {
-			BTNonLeafNode root;
-			root.initializeRoot(pid, overflow_key, overflow_pid);
-			rootPid = pf.endPid();
-			treeHeight++;
-			return root.write(rootPid, pf);
+			// Leaf root was split. Create a nonleaf to point to the two leaves
+			if (treeHeight == 1) {
+				BTNonLeafNode root;
+				root.initializeRoot(pid, overflow_key, overflow_pid);
+				rootPid = pf.endPid();
+				treeHeight++;
+				if (error = root.write(rootPid, pf))
+					return error;
+			}
+			return 1;
 		}
-
-		return 0;
 	}
 
 	// We are not at a leaf node. Non leaf node.
@@ -206,7 +361,18 @@ RC BTreeIndex::recursiveInsert(int key, const RecordId& rid, int height,
 				if (error = sibling.write(overflow_pid, pf))
 					return error;
 
-				return node.write(pid, pf);
+				if (error = node.write(pid, pf))
+					return error;
+
+				// Root was split. Create a nonleaf to point to the two nonleaves
+				if (height == 1) {
+					BTNonLeafNode root;
+					root.initializeRoot(pid, overflow_key, overflow_pid);
+					rootPid = pf.endPid();
+					treeHeight++;
+					if (error = root.write(rootPid, pf))
+						return error;
+				}
 			}
 		}
 

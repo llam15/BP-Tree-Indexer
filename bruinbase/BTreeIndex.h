@@ -35,6 +35,7 @@ class BTreeIndex {
  public:
   BTreeIndex();
 
+  void test();
   void printAll();
 
   /**
@@ -115,6 +116,13 @@ class BTreeIndex {
 
   // Buffer of size 1024 to write metadata to disk.
   char metadata[PageFile::PAGE_SIZE];
+
+  typedef struct 
+  {
+    int height;
+    bool leaf_type;
+    PageId pid;
+  } BTNode;
 };
 
 #endif /* BTREEINDEX_H */

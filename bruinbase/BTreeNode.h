@@ -40,7 +40,7 @@ class BTLeafNode {
      */
     void test();
 
-    void printAll();
+    void printAll(bool keys_only = false);
 
    /**
     * Insert the (key, rid) pair to the node.
@@ -168,7 +168,7 @@ class BTNonLeafNode {
      */
     BTNonLeafNode();
 
-    void printAll();
+    void printAll(bool keys_only = false);
     void test();
    /**
     * Insert a (key, pid) pair to the node.
@@ -254,6 +254,8 @@ class BTNonLeafNode {
     * @return 0 if successful. Return an error code if there is an error.
     */
     RC write(PageId pid, PageFile& pf);
+
+    RC getChildren(PageId *children);
 
   private:
    /**
