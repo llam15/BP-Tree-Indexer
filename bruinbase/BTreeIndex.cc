@@ -98,11 +98,7 @@ void BTreeIndex::test()
 		if ( i > 1 && key != (i + 9) && rid.pid != (i + 10) && rid.sid != (i + 8) )
 		{
 			cerr << "0";
-		}	
-		// else
-		// {
-		// 	cerr << "1";
-		// }
+		}
 	}
 	
 	rc = readForward(cursor, key, rid);
@@ -111,29 +107,81 @@ void BTreeIndex::test()
 	insert_rid.pid = 10;
 	insert_rid.sid = 1;
 	insert(8, insert_rid);
-	for (int i = 92; i <= 134; i++)
+	for (int i = 93; i <= 135; i++)
 	{
 		insert_rid.pid = i + 1;
 		insert_rid.sid = i - 1;
 		insert(i, insert_rid);
 	}
-	for (int i = -12000; i <= 6; i++)
+
+	for (int i = -10000; i <= 6; i++)
 	{
-		insert_rid.pid = i + 1;
-		insert_rid.sid = i - 1;
+		insert_rid.pid = 13000 + (i + 1);
+		insert_rid.sid = 13000 + (i - 1);
 		insert(i, insert_rid);
 	}
-	printAll();
+
+	rc = locate(-9675, cursor);
+	cerr << "Obtained a cursor pointing to the key=-9675: " << (rc == 0) << endl;
+	readForward(cursor, key, rid);
+	cerr << "Was able to read cursor to get appropriate key and record: "
+		 << (key == -9675 && rid.pid == 3326 && rid.sid == 3324) << endl;
+
+	rc = locate(92, cursor);
+
+	cerr << "Obtained a cursor pointing to the key=92: " << (rc == 0) << endl;
+	cerr << "Cursor.pid = " << cursor.pid << endl;
+
+	int num_keys = printAll(false);
+	cout << num_keys << endl;
+	close();
+}
+
+void BTreeIndex::test2() 
+{
+	cerr << "===================" << endl;
+	RC rc;
+	int key; 
+	RecordId rid;
+	RecordId insert_rid; // for inserting
+	IndexCursor cursor;
+
+	cerr << "treeHeight is 0 and rootPid is -1  before opening: " << (treeHeight == 0 && rootPid == -1) << endl;
+	rc = open("test_index", 'w');
+	cerr << "Opened index successfully for writing: " << (rc == 0) << endl;
+	cerr << "rootPid: " << rootPid << endl;
+	cerr <<  "treeHeight: " << treeHeight << endl;
+
+	rc = locate(92, cursor);
+	cerr << "Obtained a cursor pointing to the key=92: " << (rc == 0) << endl;
+	readForward(cursor, key, rid);
+	cerr << "Was able to read cursor to get appropriate key and record: "
+		 << (key == 92 && rid.pid == 93 && rid.sid == 91) << endl;
+
+	readForward(cursor, key, rid);
+	cerr << "Was able to read cursor to get appropriate key and record: "
+		 << (key == 93 && rid.pid == 94 && rid.sid == 92) << endl;
+
+	insert_rid.pid = 9999;
+	insert_rid.sid = 1;
+	insert(9, insert_rid);
+	rc = locate(9, cursor);
+	cerr << "Obtained a cursor pointing to the key=9: " << (rc == 0) << endl;
+	readForward(cursor, key, rid);
+	cerr << "Was able to read cursor to get appropriate key and record: "
+		 << (key == 9 && rid.pid == 9999 && rid.sid == 1) << endl;
 	close();
 }
 
 
-void BTreeIndex::printAll()
+int BTreeIndex::printAll(bool print)
 {
 	queue<BTNode> nodes;
+	int totalKeys = 0;
 
 	if (treeHeight == 0) {
 		cout << "Empty tree" << endl;
+		return totalKeys;
 	}
 	else {
 		cout << "Tree Height: " << treeHeight << endl;
@@ -159,7 +207,8 @@ void BTreeIndex::printAll()
 		if (!next.leaf_type) {
 			BTNonLeafNode nonleaf;
 			nonleaf.read(next.pid, pf);
-			nonleaf.printAll();
+			if (print)
+				nonleaf.printAll();
 
 			PageId children[128];
 			int num_children = nonleaf.getChildren(children);
@@ -177,9 +226,12 @@ void BTreeIndex::printAll()
 		else {
 			BTLeafNode leaf;
 			leaf.read(next.pid, pf);
-			leaf.printAll();
+			if (print)
+				leaf.printAll();
+			totalKeys += leaf.getKeyCount();
 		}
 	}
+	return totalKeys;
 }
 
 /*
@@ -195,14 +247,7 @@ RC BTreeIndex::open(const string& indexname, char mode)
 	
 	// open the pagefile
 	if ( error = pf.open(indexname, mode) )
-		return error;	
-	
-	// if we haven't written anything to the pagefile, make sure we're in write mode
-	if (pf.endPid() == 0 && mode == 'r')
-	{
-		close();
-		return -1;
-	}
+		return error;
 	
 	// read in the metadata into our rootPid and treeHeight variables		
 	if ( error = pf.read(0, metadata) )

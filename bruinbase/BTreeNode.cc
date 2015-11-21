@@ -784,10 +784,6 @@ RC BTNonLeafNode::locateChildPtr(int searchKey, PageId& pid)
 	KPPair *target;
 	int num_keys = getKeyCount();
 	int i;
-
-	if (pid < 0) {
-		return RC_INVALID_PID;
-	}
 	
 	target = (KPPair *) (buffer + BTNonLeafNode::BEGINNING_OFFSET);
 	for (i = 0; i < num_keys; i++) {

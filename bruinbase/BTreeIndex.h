@@ -36,7 +36,8 @@ class BTreeIndex {
   BTreeIndex();
 
   void test();
-  void printAll();
+  void test2();
+  int printAll(bool print = true);
 
   /**
    * Open the index file in read or write mode.
