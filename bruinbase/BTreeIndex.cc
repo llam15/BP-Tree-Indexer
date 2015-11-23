@@ -495,6 +495,9 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 {
 	RC error;
 	BTLeafNode ln;
+
+	if (cursor.pid == 0)
+		return RC_INVALID_CURSOR;
 	
 	if ( error = ln.read(cursor.pid, pf) )
 		return error;
@@ -511,6 +514,6 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 		cursor.pid = ln.getNextNodePtr();
 		cursor.eid = 0;
 	}
-	
+
     return error;
 }
