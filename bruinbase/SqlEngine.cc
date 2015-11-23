@@ -319,7 +319,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
   // close the table file and return
   exit_select:
-  if (!index_error && use_tree) {
+  if (!index_error) {
     index.close();
   }
   rf.close();
