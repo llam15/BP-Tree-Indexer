@@ -149,8 +149,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   }
 
   // No index, so just read normally.
-  if (index_error || !use_tree) {
-    fprintf(stderr, "NOT USING INDEX\n");
+  if (index_error || (!use_tree && attr != 4)) {
+    // fprintf(stderr, "NOT USING INDEX\n");
     // scan the table file from the beginning
     rid.pid = rid.sid = 0;
     count = 0;
@@ -221,7 +221,7 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
   // Use BTreeIndex
   else {
-    fprintf(stderr, "USING INDEX\n");
+    // fprintf(stderr, "USING INDEX\n");
     count = 0;
     index.locate(start_key, cursor);
 
@@ -240,9 +240,11 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
         else if (cond[i].attr == 2) {
           // read the tuple
-          if ((rc = rf.read(rid, key, value)) < 0) {
-            fprintf(stderr, "Error: while reading a tuple from table %s\n", table.c_str());
-            goto exit_select;
+          if (!io_flag) {
+            if ((rc = rf.read(rid, key, value)) < 0) {
+              fprintf(stderr, "Error: while reading a tuple from table %s\n", table.c_str());
+              goto exit_select;
+            }
           }
 
           io_flag = true;
