@@ -22,6 +22,7 @@ BTreeIndex::BTreeIndex()
 {
     rootPid = -1;
 	treeHeight = 0;
+	keyCount = 0;
 	memset(metadata, 0, PageFile::PAGE_SIZE);
 }
 
@@ -255,12 +256,14 @@ RC BTreeIndex::open(const string& indexname, char mode)
 	
 	memcpy(&rootPid, metadata, sizeof(PageId));
 	memcpy(&treeHeight, metadata + sizeof(PageId), sizeof(int));
+	memcpy(&keyCount, metadata + sizeof(PageId) + sizeof(int), sizeof(int));
 	
 	// if the variables have odd data, reinitialize to default values 	
-	if (rootPid <= 0 || treeHeight < 0 || pf.endPid() == 0)
+	if (rootPid <= 0 || treeHeight < 0 || pf.endPid() == 0 || keyCount < 0)
 	{
 		rootPid = -1;
 		treeHeight = 0;
+		keyCount = 0;
 	}
 	
 	return 0;
@@ -277,6 +280,7 @@ RC BTreeIndex::close()
 	// copy the temp data into the metadata buffer
 	memcpy(metadata, &rootPid, sizeof(PageId));
 	memcpy(metadata + sizeof(PageId), &treeHeight, sizeof(int));
+	memcpy(metadata + sizeof(PageId) + sizeof(int), &keyCount, sizeof(int));
 	
 	// write metadata to the pagefile
 	if ( error = pf.write(0, metadata) )
@@ -301,6 +305,7 @@ RC BTreeIndex::insert(int key, const RecordId& rid)
 	if (treeHeight == 0) {
 		BTLeafNode leaf;
 		leaf.insert(key, rid);
+		keyCount++;
 
 		// Page 0 is reserved for metadata. 
 		// Start writing from Page 1
@@ -335,6 +340,7 @@ RC BTreeIndex::recursiveInsert(int key, const RecordId& rid, int height,
 
 		// If did not overflow, then insert was successful. Done.
 		if (leaf.insert(key, rid) == 0) {
+			keyCount++;
 			return leaf.write(pid, pf);
 		}
 
@@ -348,10 +354,10 @@ RC BTreeIndex::recursiveInsert(int key, const RecordId& rid, int height,
 			if (error = leaf.insertAndSplit(key, rid, sibling, overflow_key))
 				return error;
 
+			keyCount++;
 			overflow_pid = pf.endPid();
-
 			leaf.setNextNodePtr(overflow_pid);
-
+		
 			// Write new sibling key to disk. Return immediately if error
 			if (error = sibling.write(overflow_pid, pf))
 				return error;
@@ -516,4 +522,9 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 	}
 
     return error;
+}
+
+int BTreeIndex::getKeyCount()
+{
+	return keyCount;
 }

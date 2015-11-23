@@ -223,6 +223,13 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
   else {
     // fprintf(stderr, "USING INDEX\n");
     count = 0;
+
+    // Getting count(*) with no select conditions. Return index's keyCount
+    if (cond.size() == 0 && attr == 4) {
+      count = index.getKeyCount();
+      goto exit_while;
+    }
+
     index.locate(start_key, cursor);
 
     while (index.readForward(cursor, key, rid) == 0) {

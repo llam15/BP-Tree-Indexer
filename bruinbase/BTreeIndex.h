@@ -105,11 +105,18 @@ class BTreeIndex {
    */
   RC readForward(IndexCursor& cursor, int& key, RecordId& rid);
   
+ /**
+  * Returns number of keys in the index.
+  */
+  int getKeyCount();
+
  private:
   PageFile pf;         /// the PageFile used to store the actual b+tree in disk
 
+
   PageId   rootPid;    /// the PageId of the root node
   int      treeHeight; /// the height of the tree
+  int      keyCount;   /// the number of keys in the index
   /// Note that the content of the above two variables will be gone when
   /// this class is destructed. Make sure to store the values of the two 
   /// variables in disk, so that they can be reconstructed when the index
